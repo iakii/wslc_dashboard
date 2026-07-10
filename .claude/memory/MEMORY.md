@@ -1,0 +1,2 @@
+- [nativeapi API 模式](nativeapi-api-patterns.md) — nativeapi 包核心 API 使用模式
+- [项目架构](project-architecture.md) — Clean Architecture + Fluent UI + nativeapi 架构决策
