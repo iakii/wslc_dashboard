@@ -17,6 +17,10 @@ add_executable(${BINARY_NAME} WIN32
   # WSL Container native bridge source files
   "wslc/wslc_native_plugin.cpp"
   "wslc/wslc_service_bridge.cpp"
+  "wslc/wslc_session_bridge.cpp"
+  "wslc/wslc_image_bridge.cpp"
+  "wslc/wslc_container_bridge.cpp"
+  "wslc/wslc_process_bridge.cpp"
 )
 
 # Apply the standard set of build settings. This can be removed for applications
@@ -40,6 +44,10 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "_HAS_EXCEPTIONS=1")
 set_source_files_properties(
   "wslc/wslc_native_plugin.cpp"
   "wslc/wslc_service_bridge.cpp"
+  "wslc/wslc_session_bridge.cpp"
+  "wslc/wslc_image_bridge.cpp"
+  "wslc/wslc_container_bridge.cpp"
+  "wslc/wslc_process_bridge.cpp"
   "flutter_window.cpp"
   PROPERTIES COMPILE_DEFINITIONS "WIN32_LEAN_AND_MEAN"
 )

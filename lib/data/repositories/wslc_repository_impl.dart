@@ -1,3 +1,5 @@
+import 'package:flutter/services.dart';
+
 import '../../core/errors/failures.dart';
 import '../../domain/entities/wsl_container.dart';
 import '../../domain/entities/wsl_image.dart';
@@ -7,6 +9,15 @@ import '../datasources/wslc_native_datasource.dart';
 import '../models/wsl_container_model.dart';
 import '../models/wsl_image_model.dart';
 import '../models/wsl_session_model.dart';
+
+/// Extract a clean error message from an exception.
+/// PlatformException uses its message field; other exceptions use toString().
+String _cleanError(Object e) {
+  if (e is PlatformException) {
+    return e.message ?? e.code;
+  }
+  return e.toString();
+}
 
 /// WSL Container 仓库实现
 class WslcRepositoryImpl implements WslcRepository {
@@ -22,7 +33,7 @@ class WslcRepositoryImpl implements WslcRepository {
       final data = await _datasource.checkComponents();
       return WslSessionModel.fromJson(data).toDomain();
     } catch (e) {
-      throw NativeApiFailure('组件检查失败: $e');
+      throw NativeApiFailure('组件检查失败: ${_cleanError(e)}');
     }
   }
 
@@ -42,7 +53,7 @@ class WslcRepositoryImpl implements WslcRepository {
       });
       return WslSessionModel.fromJson(data).toDomain();
     } catch (e) {
-      throw NativeApiFailure('创建 Session 失败: $e');
+      throw NativeApiFailure('创建 Session 失败: ${_cleanError(e)}');
     }
   }
 
@@ -51,7 +62,7 @@ class WslcRepositoryImpl implements WslcRepository {
     try {
       await _datasource.terminateSession();
     } catch (e) {
-      throw NativeApiFailure('终止 Session 失败: $e');
+      throw NativeApiFailure('终止 Session 失败: ${_cleanError(e)}');
     }
   }
 
@@ -63,7 +74,7 @@ class WslcRepositoryImpl implements WslcRepository {
       final list = await _datasource.listImages();
       return list.map((e) => WslImageModel.fromJson(e).toDomain()).toList();
     } catch (e) {
-      throw NativeApiFailure('获取镜像列表失败: $e');
+      throw NativeApiFailure('获取镜像列表失败: ${_cleanError(e)}');
     }
   }
 
@@ -73,7 +84,7 @@ class WslcRepositoryImpl implements WslcRepository {
       final data = await _datasource.pullImage(imageName);
       return data['operationId'] as String;
     } catch (e) {
-      throw NativeApiFailure('拉取镜像失败: $e');
+      throw NativeApiFailure('拉取镜像失败: ${_cleanError(e)}');
     }
   }
 
@@ -82,7 +93,7 @@ class WslcRepositoryImpl implements WslcRepository {
     try {
       await _datasource.deleteImage(imageId);
     } catch (e) {
-      throw NativeApiFailure('删除镜像失败: $e');
+      throw NativeApiFailure('删除镜像失败: ${_cleanError(e)}');
     }
   }
 
@@ -96,7 +107,7 @@ class WslcRepositoryImpl implements WslcRepository {
           .map((e) => WslContainerModel.fromJson(e).toDomain())
           .toList();
     } catch (e) {
-      throw NativeApiFailure('获取容器列表失败: $e');
+      throw NativeApiFailure('获取容器列表失败: ${_cleanError(e)}');
     }
   }
 
@@ -114,7 +125,7 @@ class WslcRepositoryImpl implements WslcRepository {
       });
       return WslContainerModel.fromJson(data).toDomain();
     } catch (e) {
-      throw NativeApiFailure('创建容器失败: $e');
+      throw NativeApiFailure('创建容器失败: ${_cleanError(e)}');
     }
   }
 
@@ -124,7 +135,7 @@ class WslcRepositoryImpl implements WslcRepository {
       final data = await _datasource.startContainer(containerId);
       return data['logChannel'] as String;
     } catch (e) {
-      throw NativeApiFailure('启动容器失败: $e');
+      throw NativeApiFailure('启动容器失败: ${_cleanError(e)}');
     }
   }
 
@@ -133,7 +144,7 @@ class WslcRepositoryImpl implements WslcRepository {
     try {
       await _datasource.stopContainer(containerId);
     } catch (e) {
-      throw NativeApiFailure('停止容器失败: $e');
+      throw NativeApiFailure('停止容器失败: ${_cleanError(e)}');
     }
   }
 
@@ -142,7 +153,7 @@ class WslcRepositoryImpl implements WslcRepository {
     try {
       await _datasource.deleteContainer(containerId);
     } catch (e) {
-      throw NativeApiFailure('删除容器失败: $e');
+      throw NativeApiFailure('删除容器失败: ${_cleanError(e)}');
     }
   }
 }

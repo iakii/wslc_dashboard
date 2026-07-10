@@ -45,34 +45,37 @@ class _NavigationShellState extends State<_NavigationShell> {
 
   @override
   Widget build(BuildContext context) {
-    return NavigationView(
-      pane: NavigationPane(
-        selected: _selectedIndex,
-        size: const NavigationPaneSize(openMaxWidth: 200),
-        onChanged: (index) => setState(() => _selectedIndex = index),
-        displayMode: PaneDisplayMode.expanded,
-        items: [
-          PaneItem(
-            icon: const Icon(FluentIcons.home),
-            title: const Text('概览'),
-            body: _pages[0],
-          ),
-          PaneItem(
-            icon: const Icon(FluentIcons.box_checkmark_solid),
-            title: const Text('镜像'),
-            body: _pages[1],
-          ),
-          PaneItem(
-            icon: const Icon(FluentIcons.cube_shape),
-            title: const Text('容器'),
-            body: _pages[2],
-          ),
-          PaneItem(
-            icon: const Icon(FluentIcons.settings),
-            title: const Text('设置'),
-            body: _pages[3],
-          ),
-        ],
+    return SelectableRegion(
+      selectionControls: WindowsTextSelectionControls(),
+      child: NavigationView(
+        pane: NavigationPane(
+          selected: _selectedIndex,
+          size: const NavigationPaneSize(openMaxWidth: 200),
+          onChanged: (index) => setState(() => _selectedIndex = index),
+          displayMode: PaneDisplayMode.expanded,
+          items: [
+            PaneItem(
+              icon: const Icon(FluentIcons.home),
+              title: const Text('概览'),
+              body: _pages[0],
+            ),
+            PaneItem(
+              icon: const Icon(FluentIcons.box_checkmark_solid),
+              title: const Text('镜像'),
+              body: _pages[1],
+            ),
+            PaneItem(
+              icon: const Icon(FluentIcons.cube_shape),
+              title: const Text('容器'),
+              body: _pages[2],
+            ),
+            PaneItem(
+              icon: const Icon(FluentIcons.settings),
+              title: const Text('设置'),
+              body: _pages[3],
+            ),
+          ],
+        ),
       ),
     );
   }
