@@ -1,2 +1,5 @@
 - [nativeapi API 模式](nativeapi-api-patterns.md) — nativeapi 包核心 API 使用模式
 - [项目架构](project-architecture.md) — Clean Architecture + Fluent UI + nativeapi 架构决策
+- [WSL Containers SDK 为 C 风格 API](wsl-containers-sdk-api-type.md) — 非 C++/WinRT，使用 wslcsdk.h
+- [WIN32_LEAN_AND_MEAN 按文件限域](win32-lean-and-mean-scope.md) — 不能全局定义
+- [NuGet CMake 集成模式](nuget-cmake-integration.md) — find_package CONFIG + POST_BUILD DLL 复制

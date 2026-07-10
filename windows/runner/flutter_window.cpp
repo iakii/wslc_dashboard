@@ -3,11 +3,17 @@
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
+// Include wslc plugin header explicitly (with WIN32_LEAN_AND_MEAN defined per-file)
+#include "wslc/wslc_native_plugin.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
 
-FlutterWindow::~FlutterWindow() {}
+FlutterWindow::~FlutterWindow() {
+  // wslc_plugin_ holds a MethodChannel referencing the engine messenger;
+  // must release before messenger is destroyed.
+  wslc_plugin_.reset();
+}
 
 bool FlutterWindow::OnCreate() {
   if (!Win32Window::OnCreate()) {
@@ -27,6 +33,11 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
+  // Initialize WSL Container native bridge plugin
+  // Registers custom MethodChannel after standard plugin registration
+  wslc_plugin_ = std::make_unique<WslcNativePlugin>(
+      flutter_controller_->engine()->messenger());
+
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
   });
@@ -40,6 +51,8 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  // Release wslc_plugin first (holds MethodChannel referencing engine messenger)
+  wslc_plugin_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

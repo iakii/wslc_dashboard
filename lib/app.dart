@@ -48,8 +48,9 @@ class _NavigationShellState extends State<_NavigationShell> {
     return NavigationView(
       pane: NavigationPane(
         selected: _selectedIndex,
+        size: const NavigationPaneSize(openMaxWidth: 200),
         onChanged: (index) => setState(() => _selectedIndex = index),
-        displayMode: PaneDisplayMode.compact,
+        displayMode: PaneDisplayMode.expanded,
         items: [
           PaneItem(
             icon: const Icon(FluentIcons.home),

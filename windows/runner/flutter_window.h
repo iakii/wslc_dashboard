@@ -8,6 +8,9 @@
 
 #include "win32_window.h"
 
+// Forward declaration - actual include is in flutter_window.cpp
+class WslcNativePlugin;
+
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
  public:
@@ -28,6 +31,9 @@ class FlutterWindow : public Win32Window {
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  // WSL Container native bridge plugin (MethodChannel + C++/WinRT)
+  std::unique_ptr<WslcNativePlugin> wslc_plugin_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_
