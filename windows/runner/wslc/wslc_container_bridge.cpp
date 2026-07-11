@@ -32,8 +32,8 @@ ContainerInfo WslcContainerBridge::Create(
   }
 
   // Step 1: Init container settings
-  WslcContainerSettings settings;
-  HRESULT hr = WslcInitContainerSettings(image.c_str(), &settings);
+  WslcContainerSettings cSettings;
+  HRESULT hr = WslcInitContainerSettings(image.c_str(), &cSettings);
   if (FAILED(hr)) {
     errorMsg = "WslcInitContainerSettings failed: " +
                wslc_util::HresultToString(hr);
@@ -42,7 +42,7 @@ ContainerInfo WslcContainerBridge::Create(
 
   // Step 2: Set container name
   if (!name.empty()) {
-    hr = WslcSetContainerSettingsName(&settings, name.c_str());
+    hr = WslcSetContainerSettingsName(&cSettings, name.c_str());
     if (FAILED(hr)) {
       errorMsg = "WslcSetContainerSettingsName failed: " +
                  wslc_util::HresultToString(hr);
@@ -50,15 +50,23 @@ ContainerInfo WslcContainerBridge::Create(
     }
   }
 
-  // Step 3: Skip init process during creation.
-  // The process will be created by WslcProcessBridge when the container is started.
-  // Setting an init process here can cause SDK crashes with certain image/command combos.
-  // cmd is stored but applied later via StartLogStream.
+  // Step 3: Set init process to keep container alive.
+  // Without an init process, WslcStartContainer causes the container
+  // to exit immediately (state=exited). /bin/sleep 86400 keeps the
+  // container running for 24h; additional processes (log shell) are
+  // created later via WslcCreateContainerProcess.
+  WslcProcessSettings pSettings;
+  hr = WslcInitProcessSettings(&pSettings);
+  if (SUCCEEDED(hr)) {
+    PCSTR argv[] = {"/bin/sleep", "86400"};
+    WslcSetProcessSettingsCmdLine(&pSettings, argv, 2);
+    WslcSetContainerSettingsInitProcess(&cSettings, &pSettings);
+  }
 
   // Step 4: Create container (BLOCKING)
   WslcContainer container = nullptr;
   PWSTR errorMessage = nullptr;
-  hr = WslcCreateContainer(session, &settings, &container, &errorMessage);
+  hr = WslcCreateContainer(session, &cSettings, &container, &errorMessage);
   if (FAILED(hr)) {
     if (errorMessage) {
       errorMsg = wslc_util::WideToUtf8(errorMessage);
@@ -215,6 +223,14 @@ WslcContainer WslcContainerBridge::GetHandle(const std::string& containerId) {
   std::lock_guard<std::mutex> lock(mutex_);
   auto it = containers_.find(containerId);
   return (it != containers_.end()) ? it->second.handle : nullptr;
+}
+
+void WslcContainerBridge::SetRunning(const std::string& containerId) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  auto it = containers_.find(containerId);
+  if (it != containers_.end()) {
+    it->second.info.state = WSLC_CONTAINER_STATE_RUNNING;
+  }
 }
 
 std::string WslcContainerBridge::StateString(int state) {

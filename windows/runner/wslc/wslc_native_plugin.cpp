@@ -454,26 +454,29 @@ void WslcNativePlugin::HandleStartContainer(
     return;
   }
 
-  // Start on background thread (Start is blocking)
+  // Container is created with an init process (/bin/sleep 86400), so
+  // WslcStartContainer will not cause immediate exit. After start, create
+  // a separate log stream process (/bin/sh) for user interaction.
   RunOnBackground([this, containerId,
                    result = std::move(result)]() mutable {
     std::string errorMsg;
-    bool ok = containerBridge_->Start(containerId, errorMsg);
-
-    if (!ok) {
+    if (!containerBridge_->Start(containerId, errorMsg)) {
       result->Error("START_FAILED", errorMsg);
       return;
     }
 
-    // Set up log streaming via EventChannel (default command: /bin/sh)
     WslcContainer handle = containerBridge_->GetHandle(containerId);
     std::vector<std::string> cmd = {"/bin/sh"};
     std::string logError;
-    processBridge_->StartLogStream(handle, containerId, cmd, logError);
+    if (!processBridge_->StartLogStream(handle, containerId, cmd, logError)) {
+      result->Error("PROCESS_FAILED", logError);
+      return;
+    }
 
+    containerBridge_->SetRunning(containerId);
     flutter::EncodableMap response;
     response["success"] = true;
-    response["logChannel"] = containerId;  // logChannel == containerId
+    response["logChannel"] = containerId;
     result->Success(flutter::EncodableValue(response));
   });
 }

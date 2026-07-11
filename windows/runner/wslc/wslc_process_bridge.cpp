@@ -22,6 +22,62 @@ ContainerLogStreamHandler::~ContainerLogStreamHandler() {
     WslcReleaseProcess(process_);
     process_ = nullptr;
   }
+  if (com_initialized_) {
+    CoUninitialize();
+    com_initialized_ = false;
+  }
+}
+
+bool ContainerLogStreamHandler::CreateProcess(std::string& errorMsg) {
+  if (process_) return true;
+
+  WslcProcessSettings procSettings;
+  HRESULT hr = WslcInitProcessSettings(&procSettings);
+  if (FAILED(hr)) {
+    errorMsg = "Failed to init process settings: " +
+               wslc_util::HresultToString(hr);
+    return false;
+  }
+
+  std::vector<PCSTR> argv;
+  for (const auto& arg : cmd_) {
+    argv.push_back(arg.c_str());
+  }
+  hr = WslcSetProcessSettingsCmdLine(&procSettings, argv.data(),
+                                      argv.size());
+  if (FAILED(hr)) {
+    errorMsg = "Failed to set command line: " +
+               wslc_util::HresultToString(hr);
+    return false;
+  }
+
+  WslcProcessCallbacks callbacks = {};
+  callbacks.onStdOut = &OnStdOut;
+  callbacks.onStdErr = &OnStdErr;
+  callbacks.onExit = &OnExit;
+  hr = WslcSetProcessSettingsCallbacks(&procSettings, &callbacks, this);
+  if (FAILED(hr)) {
+    errorMsg = "Failed to register callbacks: " +
+               wslc_util::HresultToString(hr);
+    return false;
+  }
+
+  PWSTR errorMsgW = nullptr;
+  hr = WslcCreateContainerProcess(container_, &procSettings,
+                                   &process_, &errorMsgW);
+  if (FAILED(hr)) {
+    if (errorMsgW) {
+      errorMsg = wslc_util::WideToUtf8(errorMsgW);
+      CoTaskMemFree(errorMsgW);
+    } else {
+      errorMsg = "Process creation failed: " +
+                 wslc_util::HresultToString(hr);
+    }
+    return false;
+  }
+
+  if (errorMsgW) CoTaskMemFree(errorMsgW);
+  return true;
 }
 
 std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>>
@@ -30,75 +86,27 @@ ContainerLogStreamHandler::OnListenInternal(
     std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& events) {
   sink_ = std::move(events);
 
-  // Build process settings
-  WslcProcessSettings procSettings;
-  HRESULT hr = WslcInitProcessSettings(&procSettings);
-  if (FAILED(hr)) {
-    if (sink_) {
-      PushLog("stderr", "Failed to init process settings: " +
-               wslc_util::HresultToString(hr));
-      PushLog("exit", "");
-      sink_->EndOfStream();
-    }
+  // If process exited before the Dart listener attached, replay the exit event
+  if (exited_) {
+    PushLog("exit", std::to_string(exit_code_));
+    sink_->EndOfStream();
+    sink_.reset();
     return nullptr;
   }
 
-  // Set command line
-  std::vector<PCSTR> argv;
-  for (const auto& arg : cmd_) {
-    argv.push_back(arg.c_str());
-  }
-  hr = WslcSetProcessSettingsCmdLine(&procSettings, argv.data(), argv.size());
-  if (FAILED(hr)) {
-    if (sink_) {
-      PushLog("stderr", "Failed to set command line: " +
-               wslc_util::HresultToString(hr));
+  // If process was not pre-created (should not normally happen), fall back
+  if (!process_) {
+    CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    com_initialized_ = true;
+    std::string errorMsg;
+    if (!CreateProcess(errorMsg)) {
+      PushLog("stderr", errorMsg);
       PushLog("exit", "");
       sink_->EndOfStream();
+      sink_.reset();
     }
-    return nullptr;
   }
 
-  // Register callbacks
-  WslcProcessCallbacks callbacks = {};
-  callbacks.onStdOut = &OnStdOut;
-  callbacks.onStdErr = &OnStdErr;
-  callbacks.onExit = &OnExit;
-  hr = WslcSetProcessSettingsCallbacks(&procSettings, &callbacks, this);
-  if (FAILED(hr)) {
-    if (sink_) {
-      PushLog("stderr", "Failed to register callbacks: " +
-               wslc_util::HresultToString(hr));
-      PushLog("exit", "");
-      sink_->EndOfStream();
-    }
-    return nullptr;
-  }
-
-  // Create process in container
-  PWSTR errorMsg = nullptr;
-  hr = WslcCreateContainerProcess(container_, &procSettings,
-                                   &process_, &errorMsg);
-  if (FAILED(hr)) {
-    std::string msg;
-    if (errorMsg) {
-      msg = wslc_util::WideToUtf8(errorMsg);
-      CoTaskMemFree(errorMsg);
-    } else {
-      msg = wslc_util::HresultToString(hr);
-    }
-    if (sink_) {
-      PushLog("stderr", "Process creation failed: " + msg);
-      PushLog("exit", "");
-      sink_->EndOfStream();
-    }
-    return nullptr;
-  }
-
-  // Free optional message even on success
-  if (errorMsg) CoTaskMemFree(errorMsg);
-
-  // Callbacks will now fire from SDK threads
   return nullptr;
 }
 
@@ -111,6 +119,10 @@ ContainerLogStreamHandler::OnCancelInternal(
     process_ = nullptr;
   }
   sink_.reset();
+  if (com_initialized_) {
+    CoUninitialize();
+    com_initialized_ = false;
+  }
   return nullptr;
 }
 
@@ -134,11 +146,17 @@ void CALLBACK ContainerLogStreamHandler::OnStdErr(
 
 void CALLBACK ContainerLogStreamHandler::OnExit(INT32 exitCode, PVOID ctx) {
   auto* self = static_cast<ContainerLogStreamHandler*>(ctx);
-  if (self->cancelled_ || !self->sink_) return;
+  if (self->cancelled_) return;
 
-  self->PushLog("exit", std::to_string(exitCode));
-  self->sink_->EndOfStream();
-  self->sink_.reset();
+  // Track exit even without sink (process may exit before Dart attaches)
+  self->exited_ = true;
+  self->exit_code_ = exitCode;
+
+  if (self->sink_) {
+    self->PushLog("exit", std::to_string(exitCode));
+    self->sink_->EndOfStream();
+    self->sink_.reset();
+  }
 }
 
 void ContainerLogStreamHandler::PushLog(const std::string& stream,
@@ -176,8 +194,13 @@ bool WslcProcessBridge::StartLogStream(
   // Build channel name
   std::string channelName = "com.wslc.dashboard/events/logs/" + containerId;
 
-  // Create handler and EventChannel
+  // Create handler and create process immediately on the calling thread.
+  // This prevents a race where the container exits before Dart attaches.
   auto handler = std::make_unique<ContainerLogStreamHandler>(container, cmd);
+  if (!handler->CreateProcess(errorMsg)) {
+    return false;
+  }
+
   auto channel =
       std::make_unique<flutter::EventChannel<flutter::EncodableValue>>(
           messenger_, channelName,

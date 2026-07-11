@@ -14,8 +14,8 @@ class AppConstants {
   /// 默认 Session 配置
   static const String defaultSessionName = 'wslc_dashboard';
   static const String defaultDataPath = r'%LOCALAPPDATA%\wslc_dashboard';
-  static const int defaultCpuCount = 2;
-  static const int defaultMemoryMB = 2048;
+  static const int defaultCpuCount = 0;   // 0 = system default
+  static const int defaultMemoryMB = 0;   // 0 = system default
 
   /// 窗口配置
   static const double defaultWindowWidth = 1280;

@@ -75,9 +75,12 @@ class WslcContainerBridge {
    */
   WslcContainer GetHandle(const std::string& containerId);
 
+  /// Update cached state to running (called when process creation succeeds
+  /// without explicit WslcStartContainer)
+  void SetRunning(const std::string& containerId);
+
   /// Convert WslcContainerState enum to string
   static std::string StateString(int state);
-
  private:
 
   struct Entry {

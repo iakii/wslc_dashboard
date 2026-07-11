@@ -78,10 +78,7 @@ class _ContainerDetailPageState extends ConsumerState<ContainerDetailPage> {
               ),
               const SizedBox(width: 8),
             ],
-            Button(
-              onPressed: _confirmDelete,
-              child: const Text('Delete'),
-            ),
+            Button(onPressed: _confirmDelete, child: const Text('Delete')),
           ],
         ),
       ),
@@ -172,17 +169,19 @@ class _ContainerDetailPageState extends ConsumerState<ContainerDetailPage> {
       ContainerStatus.created => (Colors.orange, 'Created'),
       _ => (Colors.grey, s.name),
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withAlpha(26),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        text,
-        style: FluentTheme.of(
-          context,
-        ).typography.caption?.copyWith(color: color),
+    return SelectionArea(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withAlpha(26),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          text,
+          style: FluentTheme.of(
+            context,
+          ).typography.caption?.copyWith(color: color),
+        ),
       ),
     );
   }

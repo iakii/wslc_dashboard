@@ -35,8 +35,8 @@ class WslcSessionBridge {
    * @brief Create a WSL Container session (blocking).
    * @param name       Session display name
    * @param dataPath   Storage directory path (UTF-8)
-   * @param cpuCount   CPU core count
-   * @param memoryMB   Memory limit in MB
+   * @param cpuCount   CPU core count (0 = system default)
+   * @param memoryMB   Memory limit in MB (0 = system default)
    * @param errorMsg   (out) Human-readable error on failure
    * @return Status on success; isRunning=false on failure
    */

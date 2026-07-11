@@ -27,17 +27,30 @@ class ImageListNotifier extends AsyncNotifier<List<WslImage>> {
     final repo = ref.read(wslcRepositoryProvider);
     final operationId = await repo.pullImage(name);
 
-    // 2. 订阅进度 EventChannel
+    // 2. 订阅进度 EventChannel，等待完成或失败
     final eventChannel =
         EventChannel('${AppConstants.wslcPullPrefix}$operationId');
-    eventChannel
-        .receiveBroadcastStream()
-        .listen((data) {
-      // 进度事件通过 pullProgressProvider 分发
-      ref.read(pullProgressProvider.notifier).add(data);
-    });
+    final completer = Completer<void>();
 
-    // 3. 拉取完成后刷新列表
+    eventChannel.receiveBroadcastStream().listen(
+      (data) {
+        final map = Map<String, dynamic>.from(data as Map);
+        ref.read(pullProgressProvider.notifier).add(data);
+
+        final status = map['status'] as String?;
+        if (status == 'complete') {
+          completer.complete();
+        } else if (status == 'error') {
+          completer.completeError(
+              Exception(map['message'] ?? 'Pull failed'));
+        }
+      },
+      onError: (Object e) => completer.completeError(e),
+    );
+
+    // 3. 等待拉取完成，然后刷新列表
+    await completer.future;
+    ref.read(pullProgressProvider.notifier).reset();
     await refresh();
   }
 

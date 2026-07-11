@@ -45,18 +45,24 @@ WslcSessionBridge::Status WslcSessionBridge::Create(
     return status;
   }
 
-  // Step 2: Configure CPU count
-  hr = WslcSetSessionSettingsCpuCount(&settings, static_cast<uint32_t>(cpuCount));
-  if (FAILED(hr)) {
-    errorMsg = "WslcSetSessionSettingsCpuCount failed: " + wslc_util::HresultToString(hr);
-    return status;
+  // Step 2: Configure CPU count (0 = system default, skip setter)
+  if (cpuCount > 0) {
+    hr = WslcSetSessionSettingsCpuCount(&settings, static_cast<uint32_t>(cpuCount));
+    if (FAILED(hr)) {
+      errorMsg = "WslcSetSessionSettingsCpuCount failed: " +
+                 wslc_util::HresultToString(hr);
+      return status;
+    }
   }
 
-  // Step 3: Configure memory
-  hr = WslcSetSessionSettingsMemory(&settings, static_cast<uint32_t>(memoryMB));
-  if (FAILED(hr)) {
-    errorMsg = "WslcSetSessionSettingsMemory failed: " + wslc_util::HresultToString(hr);
-    return status;
+  // Step 3: Configure memory (0 = system default, skip setter)
+  if (memoryMB > 0) {
+    hr = WslcSetSessionSettingsMemory(&settings, static_cast<uint32_t>(memoryMB));
+    if (FAILED(hr)) {
+      errorMsg = "WslcSetSessionSettingsMemory failed: " +
+                 wslc_util::HresultToString(hr);
+      return status;
+    }
   }
 
   // Step 4: Create session (BLOCKING)

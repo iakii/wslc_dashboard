@@ -1,9 +1,11 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/constants/app_constants.dart';
 import '../../domain/entities/wsl_session.dart';
+import '../../domain/entities/wsl_session_info.dart';
 import '../providers/session_providers.dart';
 
-/// WSL Session overview page — status card + statistics + actions
+/// WSL Session overview page — session selector + status card + statistics
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
 
@@ -13,10 +15,10 @@ class DashboardPage extends ConsumerStatefulWidget {
 
 class _DashboardPageState extends ConsumerState<DashboardPage> {
   // ======== Create Session Dialog Fields ========
-  final _nameController = TextEditingController(text: 'wslc_dashboard');
-  final _pathController = TextEditingController(text: r'D:\Kai\docker\wslc');
-  int _cpuCount = 2;
-  int _memoryMB = 2048;
+  final _nameController = TextEditingController(text: AppConstants.defaultSessionName);
+  final _pathController = TextEditingController(text: AppConstants.defaultDataPath);
+  int _cpuCount = 0; // 0 = system default
+  int _memoryMB = 0; // 0 = system default
 
   bool _isCreating = false;
 
@@ -32,27 +34,160 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     final sessionAsync = ref.watch(sessionProvider);
-    final isSessionReady = ref.watch(isSessionReadyProvider);
+    final sessionListAsync = ref.watch(sessionListProvider);
+    final selectedName = ref.watch(selectedSessionNameProvider);
 
     return ScaffoldPage(
-      header: const PageHeader(title: Text('Overview')),
-      content: _buildContent(context, sessionAsync, isSessionReady),
+      header: const PageHeader(title: Text('概览')),
+      content: Column(
+        children: [
+          // Session 选择器（顶部栏）
+          _buildSessionSelector(context, sessionListAsync, selectedName),
+          const Divider(),
+          // Session 详情（下方主区域）
+          Expanded(child: _buildContent(context, sessionAsync)),
+        ],
+      ),
     );
   }
 
-  Widget _buildContent(
+  // ============================================================
+  // Session 选择器
+  // ============================================================
+
+  Widget _buildSessionSelector(
     BuildContext context,
-    AsyncValue<WslSession> sessionAsync,
-    bool isSessionReady,
+    AsyncValue<List<WslSessionInfo>> sessionListAsync,
+    String selectedName,
   ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Row(
+        spacing: 12,
+        children: [
+          // Session 下拉选择
+          const Text('Session:'),
+          SizedBox(
+            width: 220,
+            child: sessionListAsync.when(
+              loading: () => const ComboBox<String>(
+                items: [],
+                placeholder: Text('加载中…'),
+              ),
+              error: (_, _) => ComboBox<String>(
+                value: selectedName,
+                items: [ComboBoxItem(value: selectedName, child: Text(selectedName))],
+                onChanged: null,
+              ),
+              data: (sessions) {
+                final items = sessions
+                    .map((s) => ComboBoxItem<String>(
+                          value: s.displayName,
+                          child: Text(s.displayName),
+                        ))
+                    .toList();
+                // 确保当前选中值在列表中
+                if (!sessions.any((s) => s.displayName == selectedName)) {
+                  items.insert(
+                    0,
+                    ComboBoxItem(value: selectedName, child: Text(selectedName)),
+                  );
+                }
+                return ComboBox<String>(
+                  value: selectedName,
+                  items: items,
+                  onChanged: (name) {
+                    if (name != null && name != selectedName) {
+                      _onSessionSelected(name);
+                    }
+                  },
+                );
+              },
+            ),
+          ),
+
+          // 刷新按钮
+          IconButton(
+            icon: const Icon(FluentIcons.refresh, size: 18),
+            onPressed: () => ref.invalidate(sessionListProvider),
+          ),
+
+          // 新建按钮
+          IconButton(
+            icon: const Icon(FluentIcons.add, size: 18),
+            onPressed: () => _showCreateDialog(context),
+          ),
+
+          const Spacer(),
+
+          // 当前 session 类型标记
+          sessionListAsync.whenOrNull(
+            data: (sessions) {
+              final current = sessions.where((s) => s.displayName == selectedName);
+              if (current.isEmpty) return const SizedBox.shrink();
+              final managed = current.first.isManagedByDashboard;
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: managed
+                      ? Colors.green.withValues(alpha: 0.15)
+                      : Colors.grey.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  managed ? 'Dashboard 管理' : 'CLI 管理（只读）',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: managed ? Colors.green : Colors.grey,
+                  ),
+                ),
+              );
+            },
+          ) ?? const SizedBox.shrink(),
+        ],
+      ),
+    );
+  }
+
+  /// Session 切换处理
+  void _onSessionSelected(String name) {
+    final sessions = ref.read(sessionListProvider).valueOrNull ?? [];
+    final target = sessions.where((s) => s.displayName == name);
+
+    if (target.isNotEmpty && !target.first.isManagedByDashboard) {
+      // CLI session — 无法操作，仅更新选中状态
+      ref.read(selectedSessionNameProvider.notifier).state = name;
+      return;
+    }
+
+    // Dashboard session — 切换到该 session
+    ref.read(sessionProvider.notifier).switchToSession(name);
+  }
+
+  // ============================================================
+  // 主内容区
+  // ============================================================
+
+  Widget _buildContent(BuildContext context, AsyncValue<WslSession> sessionAsync) {
     return sessionAsync.when(
-      loading: () => const Center(child: ProgressRing()),
+      loading: () => const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          spacing: 12,
+          children: [
+            ProgressRing(),
+            Text('正在连接 Session…'),
+          ],
+        ),
+      ),
       error: (error, stack) => _buildError(context, error.toString()),
       data: (session) => _buildDashboard(context, session),
     );
   }
 
-  // ======== Error State ========
+  // ============================================================
+  // Error State
+  // ============================================================
 
   Widget _buildError(BuildContext context, String message) {
     return Center(
@@ -62,14 +197,24 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             InfoBar(
-              title: const Text('Component check failed'),
+              title: const Text('Session 连接失败'),
               content: Text(message),
               severity: InfoBarSeverity.error,
             ),
             const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () => ref.read(sessionProvider.notifier).refresh(),
-              child: const Text('Retry'),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 8,
+              children: [
+                FilledButton(
+                  onPressed: () => ref.read(sessionProvider.notifier).refresh(),
+                  child: const Text('重试'),
+                ),
+                Button(
+                  onPressed: () => _showCreateDialog(context),
+                  child: const Text('手动创建…'),
+                ),
+              ],
             ),
           ],
         ),
@@ -77,7 +222,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     );
   }
 
-  // ======== Dashboard Content ========
+  // ============================================================
+  // Dashboard Content
+  // ============================================================
 
   Widget _buildDashboard(BuildContext context, WslSession session) {
     if (!session.isRunning) {
@@ -86,7 +233,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     return _buildSessionActive(context, session);
   }
 
-  /// When components are available but no session is created
+  /// Session 已终止或未创建
   Widget _buildNoSession(BuildContext context) {
     final theme = FluentTheme.of(context);
 
@@ -98,16 +245,35 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           spacing: 16,
           children: [
             const Icon(FluentIcons.status_error_full, size: 64),
-            Text('No active session', style: theme.typography.title),
+            Text('Session 已终止', style: theme.typography.title),
             Text(
-              'Create a WSL Container session to get started.',
+              '当前没有活动的 WSL 容器 Session。',
               style: theme.typography.body,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            FilledButton(
-              onPressed: () => _showCreateDialog(context),
-              child: const Text('Create Session'),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 8,
+              children: [
+                // 自动使用默认配置重新创建
+                FilledButton(
+                  onPressed: () async {
+                    ref.read(sessionProvider.notifier).createSession(
+                          name: AppConstants.defaultSessionName,
+                          dataPath: AppConstants.defaultDataPath,
+                          cpuCount: AppConstants.defaultCpuCount,
+                          memoryMB: AppConstants.defaultMemoryMB,
+                        );
+                  },
+                  child: const Text('重新创建默认 Session'),
+                ),
+                // 可选：手动指定配置
+                Button(
+                  onPressed: () => _showCreateDialog(context),
+                  child: const Text('自定义创建…'),
+                ),
+              ],
             ),
           ],
         ),
@@ -268,14 +434,14 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 InfoLabel(
                   label: 'Session Name',
                   child: TextBox(
-                    placeholder: 'wslc_dashboard',
+                    placeholder: AppConstants.defaultSessionName,
                     controller: _nameController,
                   ),
                 ),
                 InfoLabel(
                   label: 'Data Path',
                   child: TextBox(
-                    placeholder: r'C:\wslc_data',
+                    placeholder: AppConstants.defaultDataPath,
                     controller: _pathController,
                   ),
                 ),

@@ -42,6 +42,11 @@ class ContainerLogStreamHandler
                             const std::vector<std::string>& cmd);
   ~ContainerLogStreamHandler() override;
 
+  /// Create the container process (blocking, requires COM on calling thread).
+  /// Called from StartLogStream on the background thread immediately after
+  /// WslcStartContainer to prevent container exit before listener attaches.
+  bool CreateProcess(std::string& errorMsg);
+
  protected:
   std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>>
   OnListenInternal(
@@ -68,6 +73,11 @@ class ContainerLogStreamHandler
   std::vector<std::string> cmd_;
   std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> sink_;
   std::atomic<bool> cancelled_{false};
+  bool com_initialized_ = false;  // COM initialized on handler thread
+
+  /// Track early exit before listener attaches
+  std::atomic<bool> exited_{false};
+  int exit_code_ = 0;
 };
 
 /**
