@@ -51,76 +51,98 @@ class _ContainerDetailPageState extends ConsumerState<ContainerDetailPage> {
 
     return ScaffoldPage(
       header: PageHeader(
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16.0, right: 12),
+          child: IconButton(
+            icon: const Icon(FluentIcons.clear),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
         title: Text(container?.name ?? widget.containerId),
-        commandBar: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (!isRunning)
-            FilledButton(
-              child: const Text('Start'),
-              onPressed: () => ref
-                  .read(containerListProvider.notifier)
-                  .start(widget.containerId),
+        commandBar: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!isRunning)
+              FilledButton(
+                child: const Text('Start'),
+                onPressed: () => ref
+                    .read(containerListProvider.notifier)
+                    .start(widget.containerId),
+              ),
+            if (isRunning) ...[
+              FilledButton(
+                child: const Text('Stop'),
+                onPressed: () => ref
+                    .read(containerListProvider.notifier)
+                    .stop(widget.containerId),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Button(
+              onPressed: _confirmDelete,
+              child: const Text('Delete'),
             ),
-          if (isRunning) ...[
-            FilledButton(
-              child: const Text('Stop'),
-              onPressed: () => ref
-                  .read(containerListProvider.notifier)
-                  .stop(widget.containerId),
-            ),
-            const SizedBox(width: 8),
           ],
-          Button(
-            child: const Text('Delete'),
-            onPressed: () => _confirmDelete(context),
-          ),
-        ]),
+        ),
       ),
-      content: Column(children: [
-        // Info bar
-        if (container != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-            child: Card(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(children: [
-                Text('Image: ${container.imageName}',
-                    style: FluentTheme.of(context).typography.caption),
-                const SizedBox(width: 16),
-                _statusBadge(context, container.status),
-                const Spacer(),
-                Text('${_logs.length} lines',
-                    style: FluentTheme.of(context).typography.caption),
-              ]),
+      content: Column(
+        children: [
+          // Info bar
+          if (container != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+              child: Card(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      'Image: ${container.imageName}',
+                      style: FluentTheme.of(context).typography.caption,
+                    ),
+                    const SizedBox(width: 16),
+                    _statusBadge(context, container.status),
+                    const Spacer(),
+                    Text(
+                      '${_logs.length} lines',
+                      style: FluentTheme.of(context).typography.caption,
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
 
-        const SizedBox(height: 8),
+          const SizedBox(height: 8),
 
-        // Log terminal
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Card(
-              padding: const EdgeInsets.all(8),
-              child: Container(
-                color: const Color(0xFF1E1E1E),
-                child: _logs.isEmpty
-                    ? const Center(
-                        child: Text('Waiting for logs...',
-                            style: TextStyle(color: Color(0xFF808080))))
-                    : ListView.builder(
-                        controller: _scrollCtrl,
-                        padding: const EdgeInsets.all(8),
-                        itemCount: _logs.length,
-                        itemBuilder: (_, i) =>
-                            _logLine(context, _logs[i]),
-                      ),
+          // Log terminal
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Card(
+                padding: const EdgeInsets.all(8),
+                child: Container(
+                  color: const Color(0xFF1E1E1E),
+                  child: _logs.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'Waiting for logs...',
+                            style: TextStyle(color: Color(0xFF808080)),
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: _scrollCtrl,
+                          padding: const EdgeInsets.all(8),
+                          itemCount: _logs.length,
+                          itemBuilder: (_, i) => _logLine(context, _logs[i]),
+                        ),
+                ),
               ),
             ),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 
@@ -156,25 +178,28 @@ class _ContainerDetailPageState extends ConsumerState<ContainerDetailPage> {
         color: color.withAlpha(26),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(text,
-          style: FluentTheme.of(context)
-              .typography
-              .caption
-              ?.copyWith(color: color)),
+      child: Text(
+        text,
+        style: FluentTheme.of(
+          context,
+        ).typography.caption?.copyWith(color: color),
+      ),
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context) async {
+  Future<void> _confirmDelete() async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => ContentDialog(
         title: const Text('Delete Container'),
         content: const Text(
-            'This will permanently delete the container. Continue?'),
+          'This will permanently delete the container. Continue?',
+        ),
         actions: [
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           Button(
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete'),
@@ -184,10 +209,8 @@ class _ContainerDetailPageState extends ConsumerState<ContainerDetailPage> {
     );
 
     if (ok == true && mounted) {
-      await ref
-          .read(containerListProvider.notifier)
-          .delete(widget.containerId);
-      if (mounted) Navigator.pop(context);
+      await ref.read(containerListProvider.notifier).delete(widget.containerId);
+      if (mounted) Navigator.of(context).pop();
     }
   }
 }

@@ -5,6 +5,8 @@
 #include <flutter/binary_messenger.h>
 #include <flutter/method_channel.h>
 
+#include <objbase.h>
+
 #include <memory>
 #include <string>
 #include <thread>
@@ -111,11 +113,15 @@ class WslcNativePlugin {
                                 const std::string& key,
                                 const std::string& defaultValue = "");
 
-  /// Launch a background task on a std::thread.
-  /// Uses a template to accept move-only lambdas (std::function requires copyability).
+  /// Launch a background task on a std::thread with COM initialized.
+  /// SDK functions require COM to be initialized on the calling thread.
   template <typename F>
   void RunOnBackground(F&& task) {
-    backgroundThreads_.emplace_back(std::forward<F>(task));
+    backgroundThreads_.emplace_back([task = std::forward<F>(task)]() mutable {
+      HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+      task();
+      if (SUCCEEDED(hr)) CoUninitialize();
+    });
   }
 
   // ======== Members ========
